@@ -1,0 +1,13 @@
+<RCC>
+	<qresource prefix="icons">
+		<file>resources/Icone.png</file>
+	</qresource>
+	<qresource prefix="/translations">
+		<file>resources/translations/stuide-ino_fr.qm</file>
+		<file>resources/translations/stuide-ino_en.qm</file>
+		<file>resources/translations/stuide-ino_ja.qm</file>
+	</qresource>
+	<qresource prefix="/style">
+		<file>resources/style/menu.qss</file>
+	</qresource>
+</RCC>
