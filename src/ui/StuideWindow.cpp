@@ -13,6 +13,8 @@ StuideWindow::StuideWindow(QWidget* parent)
 {
     setupUi();
  
+	initArduinoCli(); 
+
     if (m_sketchManager.newSketch()) {
         QFile file(m_sketchManager.currentFilePath());
         if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -215,4 +217,49 @@ void StuideWindow::updateWindowTitle()
 {
     // Utilise directement le nom géré par le SketchManager
     setWindowTitle(QString("%1 | StuIDE-Ino %2").arg(m_sketchManager.currentSketchName(), QString(APP_VERSION)));
+}
+
+void StuideWindow::initArduinoCli() {
+    m_cliDownloader = new ArduinoCliDownloader(this);
+
+    // Suivi de la progression du téléchargement dans la console (optionnel)
+    connect(m_cliDownloader, &ArduinoCliDownloader::downloadProgress, this, [this](qint64 received, qint64 total) {
+        if (total > 0) {
+            int percent = (received * 100) / total;
+            // Tu peux afficher un message de progression ou l'injecter dans la barre d'état
+        }
+        });
+
+    // Résultat du téléchargement ou de la vérification de présence
+    connect(m_cliDownloader, &ArduinoCliDownloader::downloadFinished, this, [this](bool success, const QString& message) {
+        m_console->append(message);
+        if (success) {
+            // Une fois que l'exécutable est présent sur le disque, on connecte le manager de cartes
+
+            connect(&m_cliManager, &ArduinoCliManager::boardsUpdated, this, [this](const QList<BoardInfo>& boards) {
+                m_boardComboBox->clear();
+
+                if (boards.isEmpty()) {
+                    m_boardComboBox->addItem(tr("Aucune carte détectée"));
+                    return;
+                }
+
+                for (const auto& board : boards) {
+                    QString label = QString("%1 (%2)").arg(board.name, board.port);
+                    // On stocke le FQBN et le port dans le UserRole de l'item
+                    m_boardComboBox->addItem(label, QVariant::fromValue(QStringList{ board.fqbn, board.port }));
+                }
+                });
+
+            connect(&m_cliManager, &ArduinoCliManager::errorOccurred, this, [this](const QString& errorMsg) {
+                m_console->append(tr("Erreur Arduino-CLI : ") + errorMsg);
+                });
+
+            // On lance la détection des cartes connectées
+            m_cliManager.refreshBoards();
+        }
+        });
+
+    // Déclenche la vérification (télécharge si manquant, sinon passe direct)
+    m_cliDownloader->ensureCliAvailable();
 }

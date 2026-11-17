@@ -1,6 +1,8 @@
 #pragma once
 
 #include "../core/SketchManager.h"
+#include "../core/ArduinoCliDownloader.h"
+#include "../core/ArduinoCliManager.h"
 #include <QMainWindow>
 #include <QSplitter>
 #include <QTextEdit>
@@ -38,6 +40,7 @@ private:
 	void setupCentralWidget();
 	void retranslateUi();
 	void updateWindowTitle();
+    void initArduinoCli();
 
     // Éléments de l'interface
     QSplitter* m_splitter;
@@ -68,6 +71,9 @@ private:
     QAction* m_actionSerial;
     QAction* m_actionAbout;
 
+	ArduinoCliDownloader* m_cliDownloader;
+	ArduinoCliManager m_cliManager;
     SketchManager m_sketchManager;
+
     QString m_currentFilePath;
 };
