@@ -8,15 +8,14 @@
 #include <QCoreApplication>
 #include <QProcess>
 
-#// URL officielle de la dernière release d'arduino-cli selon l'OS
 #ifdef Q_OS_WIN
-const QString DOWNLOAD_URL = "https://github.com/arduino/arduino-cli/releases/download/v1.6.0/arduino-cli_1.6.0_Windows_64bit.zip";
+const QString DOWNLOAD_URL = "https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Windows_64bit.zip";
 const QString EXE_NAME = "arduino-cli.exe";
 #elif defined(Q_OS_LINUX)
 #ifdef __aarch64__
-const QString DOWNLOAD_URL = "https://github.com/arduino/arduino-cli/releases/download/v1.6.0/arduino-cli_1.6.0_Linux_ARM64.tar.gz";
+const QString DOWNLOAD_URL = "https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Linux_ARM64.tar.gz";
 #else
-const QString DOWNLOAD_URL = "https://github.com/arduino/arduino-cli/releases/download/v1.6.0/arduino-cli_1.6.0_Linux_64bit.tar.gz";
+const QString DOWNLOAD_URL = "https://downloads.arduino.cc/arduino-cli/arduino-cli_latest_Linux_64bit.tar.gz";
 #endif
 const QString EXE_NAME = "arduino-cli";
 #endif
@@ -33,11 +32,10 @@ QString ArduinoCliDownloader::getLocalCliPath() const {
 
 void ArduinoCliDownloader::ensureCliAvailable() {
     if (QFile::exists(getLocalCliPath())) {
-        emit downloadFinished(true, "arduino-cli est déjà présent.");
+        emit downloadFinished(true, tr("arduino-cli est déjà présent."));
         return;
     }
 
-    // Si absent, on lance le téléchargement
     startDownload();
 }
 
@@ -47,17 +45,16 @@ void ArduinoCliDownloader::startDownload()
 
     QNetworkAccessManager* manager = new QNetworkAccessManager(this);
 
-    // Correction ici : on instancie QNetworkRequest correctement
-    QNetworkRequest request;
-    request.setUrl(QUrl(DOWNLOAD_URL));
+    QNetworkRequest request{ QUrl(DOWNLOAD_URL) };
     request.setHeader(QNetworkRequest::UserAgentHeader, "StuIDE-Ino");
 
-    // On passe bien l'objet request par référence
-    QNetworkReply* reply = manager->get(request);
+    request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+        QNetworkRequest::NoLessSafeRedirectPolicy);
 
+    QNetworkReply* reply = manager->get(request);
     connect(reply, &QNetworkReply::downloadProgress, this, &ArduinoCliDownloader::downloadProgress);
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, manager]() {
         if (reply->error() == QNetworkReply::NoError) {
             QString archivePath = m_installDir + (DOWNLOAD_URL.endsWith(".zip") ? "/cli.zip" : "/cli.tar.gz");
 
@@ -67,18 +64,22 @@ void ArduinoCliDownloader::startDownload()
                 file.close();
 
                 extractArchive(archivePath);
-                file.remove(); // Nettoyage de l'archive
+                file.remove();
 
-                emit downloadFinished(true, "Téléchargement et installation réussis !");
+                if (QFile::exists(getLocalCliPath()))
+                    emit downloadFinished(true, tr("Téléchargement et installation réussis !"));
+                else
+                    emit downloadFinished(false, tr("Extraction échouée : arduino-cli introuvable."));
             }
             else {
-                emit downloadFinished(false, "Impossible d'écrire l'archive sur le disque.");
+                emit downloadFinished(false, tr("Impossible d'écrire l'archive sur le disque."));
             }
         }
         else {
-            emit downloadFinished(false, "Erreur de téléchargement : " + reply->errorString());
+            emit downloadFinished(false, tr("Erreur de téléchargement : ") + reply->errorString());
         }
         reply->deleteLater();
+        manager->deleteLater();
         });
 }
 

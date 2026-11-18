@@ -15,14 +15,16 @@ class ArduinoCliManager : public QObject {
 public:
     explicit ArduinoCliManager(QObject* parent = nullptr);
 
-    // Lance la recherche des cartes de manière asynchrone
+	void compileSketch(const QString& sketchPath, const QString& fqbn);
     void refreshBoards();
 
 signals:
-    // Signal émis quand la liste des cartes est prête
     void boardsUpdated(const QList<BoardInfo>& boards);
-    // Signal en cas d'erreur
     void errorOccurred(const QString& message);
+
+	void compilationOutput(const QString& text);
+	void compilationError(const QString& text);
+	void compilationFinished(bool success, const QString& message);
 
 private:
     QString getCliPath() const;

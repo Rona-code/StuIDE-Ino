@@ -1,5 +1,6 @@
 #include "StuideWindow.h"
 #include "../commun/TranslationManager.h"
+#include "../core/cli/CoreManager.h"
 #include <QDate>
 #include <QFont>
 #include <QSizePolicy>
@@ -7,26 +8,20 @@
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QMessageBox>
+#include <QScrollBar>
 
 StuideWindow::StuideWindow(QWidget* parent)
     : QMainWindow(parent)
 {
     setupUi();
- 
-	initArduinoCli(); 
+    initArduinoCliConnections();
+    loadInitialSketch();
 
-    if (m_sketchManager.newSketch()) {
-        QFile file(m_sketchManager.currentFilePath());
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            m_editor->setPlainText(file.readAll());
-            file.close();
-        }
-    }
-
-	resize(600, 600);
+    resize(600, 600);
     updateWindowTitle();
 }
 
+/// --- Gestion de l'interface utilisateur ---
 void StuideWindow::setupUi()
 {
     setupMenuBar();
@@ -68,6 +63,7 @@ void StuideWindow::setupMenuBar()
     connect(m_actionOpen, &QAction::triggered, this, &StuideWindow::onOpenSketch);
     connect(m_actionSave, &QAction::triggered, this, &StuideWindow::onSaveSketch);
     connect(m_actionSaveAs, &QAction::triggered, this, &StuideWindow::onSaveAsSketch);
+	connect(m_actionVerify, &QAction::triggered, this, &StuideWindow::compileCurrentSketch);
 }
 
 void StuideWindow::setupToolBar()
@@ -126,6 +122,12 @@ void StuideWindow::setupCentralWidget()
     setCentralWidget(m_splitter);
 }
 
+void StuideWindow::updateWindowTitle()
+{
+    setWindowTitle(QString("%1 | StuIDE-Ino %2").arg(m_sketchManager.currentSketchName(), QString(APP_VERSION)));
+}
+
+// --- Traduction et gestion de langue ---
 void StuideWindow::retranslateUi()
 {
     m_menuFile->setTitle(tr("Fichier"));
@@ -171,6 +173,7 @@ void StuideWindow::onLanguageChanged(int index)
     TranslationManager::instance().setLanguage(langCode);
 }
 
+// --- Gestion des croquis ---
 void StuideWindow::onNewSketch() {
     if (m_sketchManager.newSketch()) {
         updateWindowTitle();
@@ -213,53 +216,109 @@ void StuideWindow::onSaveAsSketch() {
     }
 }
 
-void StuideWindow::updateWindowTitle()
+// --- Gestion de l'Arduino CLI ---
+void StuideWindow::loadInitialSketch()
 {
-    // Utilise directement le nom géré par le SketchManager
-    setWindowTitle(QString("%1 | StuIDE-Ino %2").arg(m_sketchManager.currentSketchName(), QString(APP_VERSION)));
+    if (m_sketchManager.newSketch()) {
+        QFile file(m_sketchManager.currentFilePath());
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            m_editor->setPlainText(file.readAll());
+            file.close();
+        }
+    }
 }
 
 void StuideWindow::initArduinoCli() {
     m_cliDownloader = new ArduinoCliDownloader(this);
 
-    // Suivi de la progression du téléchargement dans la console (optionnel)
-    connect(m_cliDownloader, &ArduinoCliDownloader::downloadProgress, this, [this](qint64 received, qint64 total) {
-        if (total > 0) {
-            int percent = (received * 100) / total;
-            // Tu peux afficher un message de progression ou l'injecter dans la barre d'état
-        }
-        });
-
-    // Résultat du téléchargement ou de la vérification de présence
     connect(m_cliDownloader, &ArduinoCliDownloader::downloadFinished, this, [this](bool success, const QString& message) {
         m_console->append(message);
         if (success) {
-            // Une fois que l'exécutable est présent sur le disque, on connecte le manager de cartes
 
-            connect(&m_cliManager, &ArduinoCliManager::boardsUpdated, this, [this](const QList<BoardInfo>& boards) {
-                m_boardComboBox->clear();
+            QString cliPath = m_cliDownloader->getLocalCliPath();
 
-                if (boards.isEmpty()) {
-                    m_boardComboBox->addItem(tr("Aucune carte détectée"));
-                    return;
+            CoreManager* coreManager = new CoreManager(cliPath, this);
+
+            m_console->append(tr("Installation automatique du cœur AVR en arrière-plan..."));
+
+            connect(coreManager, &CoreManager::coreInstallFinished, this, [this, coreManager](bool ok, const QString& msg) {
+                m_console->append(msg);
+                if (ok) {
+                    m_cliManager.refreshBoards();
                 }
-
-                for (const auto& board : boards) {
-                    QString label = QString("%1 (%2)").arg(board.name, board.port);
-                    // On stocke le FQBN et le port dans le UserRole de l'item
-                    m_boardComboBox->addItem(label, QVariant::fromValue(QStringList{ board.fqbn, board.port }));
-                }
+                coreManager->deleteLater();
                 });
 
-            connect(&m_cliManager, &ArduinoCliManager::errorOccurred, this, [this](const QString& errorMsg) {
-                m_console->append(tr("Erreur Arduino-CLI : ") + errorMsg);
-                });
-
-            // On lance la détection des cartes connectées
-            m_cliManager.refreshBoards();
+            coreManager->installCore("arduino:avr");
         }
         });
 
-    // Déclenche la vérification (télécharge si manquant, sinon passe direct)
     m_cliDownloader->ensureCliAvailable();
+}
+
+void StuideWindow::initArduinoCliConnections() {
+    connect(&m_cliManager, &ArduinoCliManager::boardsUpdated, this, &StuideWindow::onBoardsUpdated);
+    connect(&m_cliManager, &ArduinoCliManager::errorOccurred, this, &StuideWindow::onCliErrorOccurred);
+
+	connect(&m_cliManager, &ArduinoCliManager::compilationOutput, this, [this](const QString& text) {
+		m_console->insertPlainText(text);
+		m_console->verticalScrollBar()->setValue(m_console->verticalScrollBar()->maximum());
+	});
+
+	connect(&m_cliManager, &ArduinoCliManager::compilationError, this, [this](const QString& text) {
+		m_console->insertPlainText(text);
+		m_console->verticalScrollBar()->setValue(m_console->verticalScrollBar()->maximum());
+	});
+
+	connect(&m_cliManager, &ArduinoCliManager::compilationFinished, this, [this](bool success, const QString& message) {
+		m_console->append("\n" + message);
+	});
+
+    initArduinoCli();
+}
+
+void StuideWindow::onBoardsUpdated(const QList<BoardInfo>& boards) {
+    m_boardComboBox->clear();
+
+    if (boards.isEmpty()) {
+        m_boardComboBox->addItem(tr("Aucune carte détectée"));
+        return;
+    }
+
+    for (const auto& board : boards) {
+        QString label = QString("%1 (%2)").arg(board.name, board.port);
+        m_boardComboBox->addItem(label, QVariant::fromValue(QStringList{ board.fqbn, board.port }));
+    }
+}
+
+void StuideWindow::compileCurrentSketch() {
+	m_console->clear();
+
+    QString currentContent = m_editor->toPlainText();
+    if (!m_sketchManager.saveSketch(currentContent)) {
+        if (!m_sketchManager.saveAsSketch(this, currentContent)) {
+            return;
+        }
+    }
+
+    QString sketchPath = m_sketchManager.currentFilePath();
+
+    QString fqbn = "arduino:avr:uno"; // Fallback par défaut
+    if (m_boardComboBox->count() > 0 && m_boardComboBox->currentIndex() != -1) {
+        QVariant data = m_boardComboBox->currentData();
+        if (data.canConvert<QStringList>()) {
+            QStringList list = data.toStringList();
+            if (!list.isEmpty()) {
+                fqbn = list.at(0);
+            }
+        }
+    }
+
+    m_console->append(tr("Compilation en cours pour %1...").arg(fqbn));
+
+    m_cliManager.compileSketch(sketchPath, fqbn);
+}
+
+void StuideWindow::onCliErrorOccurred(const QString& errorMsg) {
+    m_console->append(tr("Erreur Arduino-CLI : ") + errorMsg);
 }

@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../core/SketchManager.h"
-#include "../core/ArduinoCliDownloader.h"
-#include "../core/ArduinoCliManager.h"
+#include "../core/sketch/SketchManager.h"
+#include "../core/cli/ArduinoCliDownloader.h"
+#include "../core/cli/ArduinoCliManager.h"
 #include <QMainWindow>
 #include <QSplitter>
 #include <QTextEdit>
@@ -41,6 +41,11 @@ private:
 	void retranslateUi();
 	void updateWindowTitle();
     void initArduinoCli();
+	void initArduinoCliConnections();
+	void loadInitialSketch();
+	void onBoardsUpdated(const QList<BoardInfo>& boards);
+	void onCliErrorOccurred(const QString& errorMsg);
+	void compileCurrentSketch();
 
     // Éléments de l'interface
     QSplitter* m_splitter;

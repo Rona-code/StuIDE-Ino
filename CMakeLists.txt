@@ -76,13 +76,15 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
 # -------------------------
 file(GLOB_RECURSE SOURCES
     "${CMAKE_SOURCE_DIR}/src/commun/*.cpp"
-    "${CMAKE_SOURCE_DIR}/src/core/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/core/cli/*.cpp"
+    "${CMAKE_SOURCE_DIR}/src/core/sketch/*.cpp"
     "${CMAKE_SOURCE_DIR}/src/ui/*.cpp"
 )
 
 file(GLOB_RECURSE HEADERS
     "${CMAKE_SOURCE_DIR}/src/commun/*.h"
-    "${CMAKE_SOURCE_DIR}/src/core/*.h"
+    "${CMAKE_SOURCE_DIR}/src/core/cli/*.h"
+    "${CMAKE_SOURCE_DIR}/src/core/sketch/*.h"
     "${CMAKE_SOURCE_DIR}/src/ui/*.h"
 )
 
