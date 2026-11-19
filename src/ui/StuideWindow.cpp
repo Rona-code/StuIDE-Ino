@@ -1,6 +1,7 @@
 #include "StuideWindow.h"
 #include "../commun/TranslationManager.h"
 #include "../core/cli/CoreManager.h"
+#include "../core/sketch/CodeEditor.h"
 #include <QDate>
 #include <QFont>
 #include <QSizePolicy>
@@ -9,6 +10,7 @@
 #include <QFileInfo>
 #include <QMessageBox>
 #include <QScrollBar>
+#include <QAbstractItemView>
 
 StuideWindow::StuideWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -64,6 +66,7 @@ void StuideWindow::setupMenuBar()
     connect(m_actionSave, &QAction::triggered, this, &StuideWindow::onSaveSketch);
     connect(m_actionSaveAs, &QAction::triggered, this, &StuideWindow::onSaveAsSketch);
 	connect(m_actionVerify, &QAction::triggered, this, &StuideWindow::compileCurrentSketch);
+	connect(m_actionUpload, &QAction::triggered, this, &StuideWindow::uploadCurrentSketch);
 }
 
 void StuideWindow::setupToolBar()
@@ -108,8 +111,11 @@ void StuideWindow::setupCentralWidget()
 {
     m_splitter = new QSplitter(Qt::Vertical, this);
 
-    m_editor = new QTextEdit(this);
-    m_editor->setFont(QFont("Consolas", 11));
+	m_editor = new CodeEditor(this);
+
+	connect(m_editor, &QTextEdit::textChanged, this, [this]() {
+		m_cliManager.resetCompileSuccess();
+	});
 
     m_console = new QTextEdit(this);
     m_console->setReadOnly(true);
@@ -176,6 +182,7 @@ void StuideWindow::onLanguageChanged(int index)
 // --- Gestion des croquis ---
 void StuideWindow::onNewSketch() {
     if (m_sketchManager.newSketch()) {
+		m_cliManager.resetCompileSuccess();
         updateWindowTitle();
         m_editor->clear();
         m_console->append(tr("Nouveau croquis créé."));
@@ -184,6 +191,7 @@ void StuideWindow::onNewSketch() {
 
 void StuideWindow::onOpenSketch() {
     if (m_sketchManager.openSketch(this)) {
+		m_cliManager.resetCompileSuccess();
         updateWindowTitle();
 
         QFile file(m_sketchManager.currentFilePath());
@@ -317,6 +325,44 @@ void StuideWindow::compileCurrentSketch() {
     m_console->append(tr("Compilation en cours pour %1...").arg(fqbn));
 
     m_cliManager.compileSketch(sketchPath, fqbn);
+}
+
+void StuideWindow::uploadCurrentSketch() {
+	m_console->clear();
+	
+	if (!m_cliManager.isCompileSuccess()) {
+		m_console->append(tr("Veuillez compiler le croquis avec succès avant de téléverser."));
+		return;
+	}
+
+    QString currentContent = m_editor->toPlainText();
+	if (!m_sketchManager.saveSketch(currentContent)) {
+		if (!m_sketchManager.saveAsSketch(this, currentContent)) {
+			return;
+		}
+	}
+
+	QString sketchPath = m_sketchManager.currentFilePath();
+	QString fqbn = "arduino:avr:uno"; // Fallback par défaut
+	QString port = "";
+	
+    if (m_boardComboBox->count() > 0 && m_boardComboBox->currentIndex() != -1) {
+		QVariant data = m_boardComboBox->currentData();
+		if (data.canConvert<QStringList>()) {
+			QStringList list = data.toStringList();
+			if (list.size() >= 2) {
+				fqbn = list.at(0);
+				port = list.at(1);
+			}
+		}
+	}
+
+	if (port.isEmpty()) {
+		QMessageBox::warning(this, tr("Erreur"), tr("Aucun port série sélectionné."));
+		return;
+	}
+	m_console->append(tr("Téléversement en cours pour %1 (port %2)...").arg(fqbn, port));
+	m_cliManager.uploadSketch(sketchPath, fqbn, port);
 }
 
 void StuideWindow::onCliErrorOccurred(const QString& errorMsg) {

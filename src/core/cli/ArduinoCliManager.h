@@ -16,7 +16,11 @@ public:
     explicit ArduinoCliManager(QObject* parent = nullptr);
 
 	void compileSketch(const QString& sketchPath, const QString& fqbn);
+	void uploadSketch(const QString& sketchPath, const QString& fqbn, const QString& port);
     void refreshBoards();
+
+	void resetCompileSuccess() { m_lastCompileSuccess = false; }
+	bool isCompileSuccess() const { return m_lastCompileSuccess; }
 
 signals:
     void boardsUpdated(const QList<BoardInfo>& boards);
@@ -28,4 +32,6 @@ signals:
 
 private:
     QString getCliPath() const;
+
+    bool m_lastCompileSuccess = false;
 };

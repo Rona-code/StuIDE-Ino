@@ -125,6 +125,7 @@ void ArduinoCliManager::refreshBoards() {
 
 // --- Compilation ---
 void ArduinoCliManager::compileSketch(const QString& sketchPath, const QString& fqbn) {
+    m_lastCompileSuccess = false;
     QProcess* process = new QProcess(this);
 
 	connect(process, &QProcess::readyReadStandardOutput, this, [this, process]() {
@@ -141,9 +142,11 @@ void ArduinoCliManager::compileSketch(const QString& sketchPath, const QString& 
 
 	connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this, process](int exitCode,QProcess::ExitStatus) {
 		if (exitCode != 0) {
+            m_lastCompileSuccess = false;
             emit compilationFinished(false, tr("Erreur de compilation. Code exit : %1").arg(exitCode));
 		}
 		else {
+		    m_lastCompileSuccess = true;
             emit compilationFinished(true, tr("Compilation réussie !"));
 		}
 		process->deleteLater();
@@ -151,4 +154,34 @@ void ArduinoCliManager::compileSketch(const QString& sketchPath, const QString& 
 
 	QString cliPath = getCliPath();
 	process->start(cliPath, { "compile", "--fqbn", fqbn, sketchPath });
+}
+
+void ArduinoCliManager::uploadSketch(const QString& sketchPath, const QString& fqbn, const QString& port) {
+	QProcess* process = new QProcess(this);
+
+	connect(process, &QProcess::readyReadStandardOutput, this, [this, process]() {
+		QString output = QString::fromUtf8(process->readAllStandardOutput());
+		emit compilationOutput(output);
+		qDebug().noquote() << output;
+	});
+
+	connect(process, &QProcess::readyReadStandardError, this, [this, process]() {
+		QString errorOutput = QString::fromUtf8(process->readAllStandardError());
+		emit compilationError(errorOutput);
+		qDebug().noquote() << errorOutput;
+	});
+
+	connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished), this, [this, process](int exitCode, QProcess::ExitStatus) {
+		if (exitCode != 0) {
+			emit compilationFinished(false, tr("Erreur de téléversement. Code exit : %1").arg(exitCode));
+		}
+		else {
+			emit compilationFinished(true, tr("Téléversement réussi !"));
+		}
+		process->deleteLater();
+	});
+
+	QString cliPath = getCliPath();
+
+	process->start(cliPath, { "upload", "--fqbn", fqbn, "--port", port, sketchPath });
 }

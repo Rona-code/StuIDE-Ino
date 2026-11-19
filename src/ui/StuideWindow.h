@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ArduinoSyntaxHighlighter.h"
 #include "../core/sketch/SketchManager.h"
 #include "../core/cli/ArduinoCliDownloader.h"
 #include "../core/cli/ArduinoCliManager.h"
@@ -13,6 +14,7 @@
 #include <QAction>
 #include <QString>
 #include <QEvent>
+#include <QCompleter>
 
 class StuideWindow : public QMainWindow
 {
@@ -46,6 +48,7 @@ private:
 	void onBoardsUpdated(const QList<BoardInfo>& boards);
 	void onCliErrorOccurred(const QString& errorMsg);
 	void compileCurrentSketch();
+	void uploadCurrentSketch();
 
     // Éléments de l'interface
     QSplitter* m_splitter;
