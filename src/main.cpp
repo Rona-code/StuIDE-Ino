@@ -1,10 +1,6 @@
 #include <QCoreApplication>
 #include <QApplication>
 #include <QIcon>
-#include <QFile>
-#include <QStandardPaths>
-#include <QDebug>
-#include <QDir>
 
 #include "commun/AppInitializer.h"
 #include "commun/TranslationManager.h"
@@ -15,10 +11,8 @@ int main(int argc, char* argv[])
     QCoreApplication::setOrganizationName("Stusoft");
     QCoreApplication::setApplicationName("StuIDE-Ino");
 
-    QApplication a(argc, argv);
-
-	a.setQuitOnLastWindowClosed(false);
-	a.setWindowIcon(QIcon(":/resources/Icone.png"));
+    QApplication app(argc, argv);
+	app.setWindowIcon(QIcon(":/resources/Icone.png"));
 
     // Charge la langue de base
     TranslationManager::instance().loadSavedLanguage();
@@ -26,9 +20,8 @@ int main(int argc, char* argv[])
     if (!AppInitializer::init())
         return 0;
 
-    StuideWindow w;
+    StuideWindow mainWindow;
+    mainWindow.show();
 
-    w.show();
-
-    return a.exec();
+    return app.exec();
 }

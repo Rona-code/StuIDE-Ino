@@ -4,12 +4,29 @@
 #include <QJsonObject>
 #include <QJsonArray>
 #include <QCoreApplication>
+#include <QPointer>
 #include <QDir>
 #include <QFile>
 #include <QStandardPaths>
 #include <QDebug>
 
 ArduinoCliManager::ArduinoCliManager(QObject* parent) : QObject(parent) {}
+
+ArduinoCliManager::~ArduinoCliManager()
+{
+    const auto processes = findChildren<QProcess*>();
+    for (QProcess* proc : processes) {
+        if (!proc) {
+            continue;
+        }
+        proc->blockSignals(true);
+        proc->disconnect(this);
+        if (proc->state() != QProcess::NotRunning) {
+            proc->kill();
+            proc->waitForFinished(1000);
+        }
+    }
+}
 
 // --- Gestion de Carte ---
 QString ArduinoCliManager::getCliPath() const {
@@ -121,6 +138,72 @@ void ArduinoCliManager::refreshBoards() {
     qDebug() << tr("Chemin utilisé pour arduino-cli :") << cliPath;
 
     process->start(cliPath, { "board", "list", "--format", "json" });
+}
+
+void ArduinoCliManager::fetchAllBoards()
+{
+    const QString cli = getCliPath();
+    if (cli.isEmpty()) {
+        return;
+    }
+
+    auto* process = new QProcess(this);
+    QPointer<ArduinoCliManager> self(this);
+    QPointer<QProcess> procPtr(process);
+
+    process->setProgram(cli);
+    process->setArguments({ QStringLiteral("board"), QStringLiteral("listall"), QStringLiteral("--format"), QStringLiteral("json") });
+
+    connect(process, QOverload<int, QProcess::ExitStatus>::of(&QProcess::finished),
+        this, [self, procPtr](int exitCode, QProcess::ExitStatus exitStatus) {
+            if (procPtr) {
+                procPtr->deleteLater();
+            }
+            if (!self || !procPtr) {
+                return;
+            }
+            if (exitStatus != QProcess::NormalExit || exitCode != 0) {
+                return;
+            }
+
+            const QByteArray rawOutput = procPtr->readAllStandardOutput();
+            const QJsonDocument doc = QJsonDocument::fromJson(rawOutput);
+            if (!doc.isObject()) {
+                return;
+            }
+
+            const QJsonArray boardsArray = doc.object().value(QStringLiteral("boards")).toArray();
+            QVector<KnownBoardInfo> parsedBoards;
+            parsedBoards.reserve(boardsArray.size());
+
+            for (const QJsonValue& value : boardsArray) {
+                if (!value.isObject()) {
+                    continue;
+                }
+                const QJsonObject obj = value.toObject();
+                const QString fqbn = obj.value(QStringLiteral("fqbn")).toString().trimmed();
+                if (fqbn.isEmpty()) {
+                    continue;
+                }
+
+                KnownBoardInfo info;
+                info.fqbn = fqbn;
+                info.name = obj.value(QStringLiteral("name")).toString().trimmed();
+                parsedBoards.append(info);
+            }
+
+            if (!parsedBoards.isEmpty()) {
+                emit self->allBoardsLoaded(parsedBoards);
+            }
+        });
+
+    connect(process, &QProcess::errorOccurred, this, [procPtr](QProcess::ProcessError) {
+        if (procPtr) {
+            procPtr->deleteLater();
+        }
+        });
+
+    process->start();
 }
 
 // --- Compilation ---

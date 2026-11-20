@@ -114,6 +114,15 @@ bool CodeEditor::eventFilter(QObject* watched, QEvent* event)
         }
 
         if (watched == this) {
+            // Fermeture automatique de '{'
+            if (keyEvent->key() == Qt::Key_BraceLeft) {
+                QTextCursor cursor = textCursor();
+                cursor.insertText("{}");
+                cursor.movePosition(QTextCursor::Left);
+                setTextCursor(cursor);
+                return true;
+            }
+
             if (keyEvent->key() == Qt::Key_Tab) {
                 textCursor().insertText("    ");
                 return true;
@@ -122,7 +131,9 @@ bool CodeEditor::eventFilter(QObject* watched, QEvent* event)
             if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
                 QTextCursor cursor = textCursor();
                 QString currentLine = cursor.block().text();
+                int posInBlock = cursor.positionInBlock();
 
+                // Indentation de la ligne courante
                 QString indent;
                 for (const QChar& ch : currentLine) {
                     if (ch == ' ' || ch == '\t') {
@@ -133,7 +144,30 @@ bool CodeEditor::eventFilter(QObject* watched, QEvent* event)
                     }
                 }
 
-                bool opensBrace = currentLine.trimmed().endsWith('{');
+                QString beforeCursor = currentLine.left(posInBlock).trimmed();
+                QString afterCursor = currentLine.mid(posInBlock).trimmed();
+
+                // Cas particulier : curseur juste entre '{' et '}'
+                if (beforeCursor.endsWith('{') && afterCursor.startsWith('}')) {
+                    QString innerIndent = indent + "    ";
+
+                    cursor.beginEditBlock();
+                    cursor.insertBlock();
+                    cursor.insertText(innerIndent);
+
+                    int targetPos = cursor.position(); // Position finale du curseur au milieu
+
+                    cursor.insertBlock();
+                    cursor.insertText(indent);
+                    cursor.endEditBlock();
+
+                    cursor.setPosition(targetPos);
+                    setTextCursor(cursor);
+                    return true;
+                }
+
+                // Cas standard : ligne se terminant par '{'
+                bool opensBrace = beforeCursor.endsWith('{');
 
                 cursor.insertBlock();
                 cursor.insertText(indent);

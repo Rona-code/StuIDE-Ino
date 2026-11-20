@@ -14,7 +14,7 @@
 #include <QAction>
 #include <QString>
 #include <QEvent>
-#include <QCompleter>
+#include <QLabel>
 
 class StuideWindow : public QMainWindow
 {
@@ -26,6 +26,7 @@ public:
 
 protected:
 	void changeEvent(QEvent* event) override;
+	void closeEvent(QCloseEvent* event) override;
 
 private slots:
 	void onLanguageChanged(int index);
@@ -40,46 +41,52 @@ private:
 	void setupMenuBar();
 	void setupToolBar();
 	void setupCentralWidget();
+	void setupStatusBar();
 	void retranslateUi();
 	void updateWindowTitle();
     void initArduinoCli();
 	void initArduinoCliConnections();
 	void loadInitialSketch();
+	void onAllBoardsLoaded(const QVector<KnownBoardInfo>& boards);
 	void onBoardsUpdated(const QList<BoardInfo>& boards);
 	void onCliErrorOccurred(const QString& errorMsg);
 	void compileCurrentSketch();
 	void uploadCurrentSketch();
 
+    QString currentTargetFqbn() const;
+
     // Éléments de l'interface
-    QSplitter* m_splitter;
-    QTextEdit* m_editor;
-    QTextEdit* m_console;
-    QToolBar* m_toolbar;
-    QComboBox* m_boardComboBox;
-    QComboBox* m_langComboBox;
+    QSplitter* m_splitter = nullptr;
+    QTextEdit* m_editor = nullptr;
+    QTextEdit* m_console = nullptr;
+    QToolBar* m_toolbar = nullptr;
+    QComboBox* m_boardComboBox = nullptr;
+    QComboBox* m_langComboBox = nullptr;
+    QComboBox* m_statusBoardCombo = nullptr;
+	QLabel* m_statusInfoLabel = nullptr;
 
     // Menus
-    QMenu* m_menuFile;
-    QMenu* m_menuEdit;
-    QMenu* m_menuSketch;
-    QMenu* m_menuTools;
-    QMenu* m_menuHelp;
+    QMenu* m_menuFile = nullptr;
+    QMenu* m_menuEdit = nullptr;
+    QMenu* m_menuSketch = nullptr;
+    QMenu* m_menuTools = nullptr;
+    QMenu* m_menuHelp = nullptr;
 
     // Actions traductibles
-    QAction* m_actionNew;
-    QAction* m_actionOpen;
-    QAction* m_actionSave;
-	QAction* m_actionSaveAs;
-    QAction* m_actionUndo;
-    QAction* m_actionRedo;
-    QAction* m_actionVerify;
-    QAction* m_actionUpload;
-    QAction* m_actionBoardMgr;
-    QAction* m_actionLibMgr;
-    QAction* m_actionSerial;
-    QAction* m_actionAbout;
+    QAction* m_actionNew = nullptr;
+    QAction* m_actionOpen = nullptr;
+    QAction* m_actionSave = nullptr;
+	QAction* m_actionSaveAs = nullptr;
+    QAction* m_actionUndo = nullptr;
+    QAction* m_actionRedo = nullptr;
+    QAction* m_actionVerify = nullptr;
+    QAction* m_actionUpload = nullptr;
+    QAction* m_actionBoardMgr = nullptr;
+    QAction* m_actionLibMgr = nullptr;
+    QAction* m_actionSerial = nullptr;
+    QAction* m_actionAbout = nullptr;
 
-	ArduinoCliDownloader* m_cliDownloader;
+	ArduinoCliDownloader* m_cliDownloader = nullptr;
 	ArduinoCliManager m_cliManager;
     SketchManager m_sketchManager;
 

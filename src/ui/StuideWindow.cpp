@@ -1,6 +1,9 @@
 #include "StuideWindow.h"
+#include "BoardManagerDialog.h"
 #include "../commun/TranslationManager.h"
 #include "../core/cli/CoreManager.h"
+#include "../core/cli/ArduinoCliDownloader.h"
+#include "../core/cli/ArduinoCliManager.h"
 #include "../core/sketch/CodeEditor.h"
 #include <QDate>
 #include <QFont>
@@ -11,6 +14,10 @@
 #include <QMessageBox>
 #include <QScrollBar>
 #include <QAbstractItemView>
+#include <QComboBox>
+#include <QLabel>
+#include <QSignalBlocker>
+#include <QStatusBar>
 
 StuideWindow::StuideWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -29,6 +36,7 @@ void StuideWindow::setupUi()
     setupMenuBar();
     setupToolBar();
     setupCentralWidget();
+    setupStatusBar();
     retranslateUi();
 }
 
@@ -67,6 +75,20 @@ void StuideWindow::setupMenuBar()
     connect(m_actionSaveAs, &QAction::triggered, this, &StuideWindow::onSaveAsSketch);
 	connect(m_actionVerify, &QAction::triggered, this, &StuideWindow::compileCurrentSketch);
 	connect(m_actionUpload, &QAction::triggered, this, &StuideWindow::uploadCurrentSketch);
+    connect(m_actionBoardMgr, &QAction::triggered, this, [this]() {
+		QString cliPath = m_cliDownloader ? m_cliDownloader->getLocalCliPath() : m_cliManager.getCliPath();
+		auto* coreMgr = new CoreManager(cliPath, this);
+		auto* dlg = new BoardManagerDialog(coreMgr, this);
+		dlg->setAttribute(Qt::WA_DeleteOnClose);
+        coreMgr->setParent(dlg);
+
+        connect(dlg, &BoardManagerDialog::coresChanged, this, [this]() {
+            m_cliManager.refreshBoards();
+            m_cliManager.fetchAllBoards();
+        });
+
+		dlg->exec();
+    });
 }
 
 void StuideWindow::setupToolBar()
@@ -128,9 +150,174 @@ void StuideWindow::setupCentralWidget()
     setCentralWidget(m_splitter);
 }
 
+void StuideWindow::setupStatusBar()
+{
+    QStatusBar* bar = statusBar();
+
+    m_statusInfoLabel = new QLabel(tr("Prêt"), this);
+    bar->addWidget(m_statusInfoLabel, 1);
+
+    m_statusBoardCombo = new QComboBox(this);
+    m_statusBoardCombo->setEditable(true);
+    m_statusBoardCombo->setInsertPolicy(QComboBox::NoInsert);
+    m_statusBoardCombo->setMinimumWidth(240);
+    m_statusBoardCombo->setPlaceholderText(tr("Sélectionner ou saisir un FQBN..."));
+    m_statusBoardCombo->setToolTip(
+        tr("Carte cible (FQBN) — cliquez pour choisir une carte ou saisissez un FQBN (ex. esp32:esp32:esp32)")
+    );
+    m_statusBoardCombo->setStyleSheet(
+        "QComboBox {"
+        "  border: none;"
+        "  background: transparent;"
+        "  padding: 2px 6px;"
+        "  font-weight: bold;"
+        "}"
+        "QComboBox:hover {"
+        "  background-color: rgba(0, 0, 0, 0.06);"
+        "  border-radius: 3px;"
+        "}"
+    );
+
+    bar->addPermanentWidget(m_statusBoardCombo);
+
+    if (m_boardComboBox) {
+        connect(m_boardComboBox, QOverload<int>::of(&QComboBox::currentIndexChanged),
+            this, [this](int index) {
+                if (index < 0 || !m_boardComboBox || !m_statusBoardCombo) {
+                    return;
+                }
+
+                const QVariant data = m_boardComboBox->itemData(index);
+                QString detectedFqbn;
+                QString portLabel;
+
+                if (data.canConvert<QStringList>()) {
+                    const QStringList list = data.toStringList();
+                    if (!list.isEmpty()) {
+                        detectedFqbn = list.at(0).trimmed();
+                    }
+                    if (list.size() >= 2) {
+                        portLabel = list.at(1).trimmed();
+                    }
+                }
+
+                if (!detectedFqbn.isEmpty()) {
+                    const int foundIdx = m_statusBoardCombo->findData(detectedFqbn);
+                    if (foundIdx != -1) {
+                        m_statusBoardCombo->setCurrentIndex(foundIdx);
+                    }
+                    else {
+                        m_statusBoardCombo->setCurrentText(detectedFqbn);
+                    }
+                    if (m_statusInfoLabel) {
+                        m_statusInfoLabel->setText(
+                            portLabel.isEmpty() ? tr("Carte détectée") : tr("Port : %1").arg(portLabel)
+                        );
+                    }
+                }
+                else if (!portLabel.isEmpty()) {
+                    if (m_statusInfoLabel) {
+                        m_statusInfoLabel->setText(tr("Port %1 — choisissez la carte (FQBN) à droite").arg(portLabel));
+                    }
+                }
+            });
+    }
+}
+
+static QString formatReadableBoardLabel(const KnownBoardInfo& board)
+{
+    const QString name = board.name.trimmed();
+    const QString fqbn = board.fqbn.trimmed();
+
+    if (name.isEmpty()) {
+        return fqbn;
+    }
+
+    // Exemple de simplification si on veut un libellé court pour l'ESP32
+    if (name.compare(QStringLiteral("ESP32"), Qt::CaseInsensitive) == 0
+        || fqbn.contains(QStringLiteral(":esp32:"), Qt::CaseInsensitive) && name.startsWith(QStringLiteral("ESP32"), Qt::CaseInsensitive)) {
+        // Garde un libellé lisible sans rallonge excessive
+        if (name.size() > 28) {
+            return name.left(25).trimmed() + QStringLiteral("...");
+        }
+    }
+
+    if (name.size() > 28) {
+        return name.left(25).trimmed() + QStringLiteral("...");
+    }
+
+    return name;
+}
+
+void StuideWindow::onAllBoardsLoaded(const QVector<KnownBoardInfo>& boards)
+{
+    if (!m_statusBoardCombo || boards.isEmpty()) {
+        return;
+    }
+
+    const QString previousFqbn = currentTargetFqbn();
+
+    QSignalBlocker blocker(m_statusBoardCombo);
+    m_statusBoardCombo->clear();
+
+    for (const KnownBoardInfo& board : boards) {
+        if (board.fqbn.isEmpty()) {
+            continue;
+        }
+
+        const QString label = formatReadableBoardLabel(board);
+        const int idx = m_statusBoardCombo->count();
+        m_statusBoardCombo->addItem(label, board.fqbn);
+
+        const QString tip = board.name.isEmpty()
+            ? board.fqbn
+            : QStringLiteral("%1\nFQBN : %2").arg(board.name, board.fqbn);
+        m_statusBoardCombo->setItemData(idx, tip, Qt::ToolTipRole);
+    }
+
+    if (!previousFqbn.isEmpty()) {
+        const int idx = m_statusBoardCombo->findData(previousFqbn);
+        if (idx != -1) {
+            m_statusBoardCombo->setCurrentIndex(idx);
+        }
+        else {
+            m_statusBoardCombo->setCurrentText(previousFqbn);
+        }
+    }
+}
+
+QString StuideWindow::currentTargetFqbn() const
+{
+    if (!m_statusBoardCombo) {
+        return {};
+    }
+
+    const int idx = m_statusBoardCombo->currentIndex();
+    const QString text = m_statusBoardCombo->currentText().trimmed();
+
+    if (!text.contains(QLatin1Char(' ')) && text.count(QLatin1Char(':')) >= 2) {
+        return text;
+    }
+
+    if (idx != -1 && text == m_statusBoardCombo->itemText(idx)) {
+        const QString dataFqbn = m_statusBoardCombo->itemData(idx).toString().trimmed();
+        if (!dataFqbn.isEmpty()) {
+            return dataFqbn;
+        }
+    }
+
+    return text;
+}
+
 void StuideWindow::updateWindowTitle()
 {
     setWindowTitle(QString("%1 | StuIDE-Ino %2").arg(m_sketchManager.currentSketchName(), QString(APP_VERSION)));
+}
+
+void StuideWindow::closeEvent(QCloseEvent* event)
+{
+    event->accept();
+    QCoreApplication::quit();
 }
 
 // --- Traduction et gestion de langue ---
@@ -253,6 +440,7 @@ void StuideWindow::initArduinoCli() {
                 m_console->append(msg);
                 if (ok) {
                     m_cliManager.refreshBoards();
+                    m_cliManager.fetchAllBoards();
                 }
                 coreManager->deleteLater();
                 });
@@ -262,6 +450,11 @@ void StuideWindow::initArduinoCli() {
         });
 
     m_cliDownloader->ensureCliAvailable();
+
+    const QString localCli = m_cliDownloader->getLocalCliPath();
+    if (!localCli.isEmpty() && QFileInfo::exists(localCli)) {
+        m_cliManager.fetchAllBoards();
+    }
 }
 
 void StuideWindow::initArduinoCliConnections() {
@@ -282,6 +475,8 @@ void StuideWindow::initArduinoCliConnections() {
 		m_console->append("\n" + message);
 	});
 
+    connect(&m_cliManager, &ArduinoCliManager::allBoardsLoaded, this, &StuideWindow::onAllBoardsLoaded);
+
     initArduinoCli();
 }
 
@@ -299,70 +494,75 @@ void StuideWindow::onBoardsUpdated(const QList<BoardInfo>& boards) {
     }
 }
 
-void StuideWindow::compileCurrentSketch() {
-	m_console->clear();
+void StuideWindow::compileCurrentSketch()
+{
+    m_console->clear();
 
-    QString currentContent = m_editor->toPlainText();
+    const QString currentContent = m_editor->toPlainText();
     if (!m_sketchManager.saveSketch(currentContent)) {
         if (!m_sketchManager.saveAsSketch(this, currentContent)) {
             return;
         }
     }
 
-    QString sketchPath = m_sketchManager.currentFilePath();
+    const QString sketchPath = m_sketchManager.currentFilePath();
+    const QString fqbn = currentTargetFqbn();
 
-    QString fqbn = "arduino:avr:uno"; // Fallback par défaut
-    if (m_boardComboBox->count() > 0 && m_boardComboBox->currentIndex() != -1) {
-        QVariant data = m_boardComboBox->currentData();
+    if (fqbn.isEmpty()) {
+        m_console->append(tr("Erreur : aucun FQBN défini. Sélectionnez ou saisissez une carte dans la barre d'état en bas."));
+        if (m_statusBoardCombo) {
+            m_statusBoardCombo->setFocus();
+            m_statusBoardCombo->showPopup();
+        }
+        return;
+    }
+
+    m_console->append(tr("Compilation en cours pour %1...").arg(fqbn));
+    m_cliManager.compileSketch(sketchPath, fqbn);
+}
+
+void StuideWindow::uploadCurrentSketch()
+{
+    m_console->clear();
+
+    if (!m_cliManager.isCompileSuccess()) {
+        m_console->append(tr("Veuillez compiler le croquis avec succès avant de téléverser."));
+        return;
+    }
+
+    const QString currentContent = m_editor->toPlainText();
+    if (!m_sketchManager.saveSketch(currentContent)) {
+        if (!m_sketchManager.saveAsSketch(this, currentContent)) {
+            return;
+        }
+    }
+
+    const QString sketchPath = m_sketchManager.currentFilePath();
+    const QString fqbn = currentTargetFqbn();
+    QString port;
+
+    if (m_boardComboBox && m_boardComboBox->count() > 0 && m_boardComboBox->currentIndex() != -1) {
+        const QVariant data = m_boardComboBox->currentData();
         if (data.canConvert<QStringList>()) {
-            QStringList list = data.toStringList();
-            if (!list.isEmpty()) {
-                fqbn = list.at(0);
+            const QStringList list = data.toStringList();
+            if (list.size() >= 2) {
+                port = list.at(1).trimmed();
             }
         }
     }
 
-    m_console->append(tr("Compilation en cours pour %1...").arg(fqbn));
+    if (fqbn.isEmpty()) {
+        m_console->append(tr("Erreur : aucun FQBN défini. Sélectionnez ou saisissez une carte dans la barre d'état en bas."));
+        return;
+    }
 
-    m_cliManager.compileSketch(sketchPath, fqbn);
-}
+    if (port.isEmpty()) {
+        QMessageBox::warning(this, tr("Erreur"), tr("Aucun port série sélectionné."));
+        return;
+    }
 
-void StuideWindow::uploadCurrentSketch() {
-	m_console->clear();
-	
-	if (!m_cliManager.isCompileSuccess()) {
-		m_console->append(tr("Veuillez compiler le croquis avec succès avant de téléverser."));
-		return;
-	}
-
-    QString currentContent = m_editor->toPlainText();
-	if (!m_sketchManager.saveSketch(currentContent)) {
-		if (!m_sketchManager.saveAsSketch(this, currentContent)) {
-			return;
-		}
-	}
-
-	QString sketchPath = m_sketchManager.currentFilePath();
-	QString fqbn = "arduino:avr:uno"; // Fallback par défaut
-	QString port = "";
-	
-    if (m_boardComboBox->count() > 0 && m_boardComboBox->currentIndex() != -1) {
-		QVariant data = m_boardComboBox->currentData();
-		if (data.canConvert<QStringList>()) {
-			QStringList list = data.toStringList();
-			if (list.size() >= 2) {
-				fqbn = list.at(0);
-				port = list.at(1);
-			}
-		}
-	}
-
-	if (port.isEmpty()) {
-		QMessageBox::warning(this, tr("Erreur"), tr("Aucun port série sélectionné."));
-		return;
-	}
-	m_console->append(tr("Téléversement en cours pour %1 (port %2)...").arg(fqbn, port));
-	m_cliManager.uploadSketch(sketchPath, fqbn, port);
+    m_console->append(tr("Téléversement en cours pour %1 (port %2)...").arg(fqbn, port));
+    m_cliManager.uploadSketch(sketchPath, fqbn, port);
 }
 
 void StuideWindow::onCliErrorOccurred(const QString& errorMsg) {
