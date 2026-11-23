@@ -69,7 +69,7 @@ endif()
 # -------------------------
 # Qt Widgets (statique)
 # -------------------------
-find_package(Qt6 REQUIRED COMPONENTS Widgets Network)
+find_package(Qt6 REQUIRED COMPONENTS Widgets Network SerialPort)
 
 # -------------------------
 # Sources / Headers
@@ -149,6 +149,7 @@ target_link_libraries(${PROJECT_NAME}
     PRIVATE
         Qt6::Widgets
         Qt6::Network
+        Qt6::SerialPort
         
 )
 

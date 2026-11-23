@@ -16,6 +16,8 @@
 #include <QEvent>
 #include <QLabel>
 
+class SerialMonitorWindow;
+
 class StuideWindow : public QMainWindow
 {
 	Q_OBJECT
@@ -87,6 +89,7 @@ private:
     QAction* m_actionAbout = nullptr;
 
 	ArduinoCliDownloader* m_cliDownloader = nullptr;
+    SerialMonitorWindow* m_serialMonitor = nullptr;
 	ArduinoCliManager m_cliManager;
     SketchManager m_sketchManager;
 

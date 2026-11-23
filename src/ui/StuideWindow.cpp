@@ -1,5 +1,6 @@
 #include "StuideWindow.h"
 #include "BoardManagerDialog.h"
+#include "SerialMonitorWindow.h"
 #include "../commun/TranslationManager.h"
 #include "../core/cli/CoreManager.h"
 #include "../core/cli/ArduinoCliDownloader.h"
@@ -447,6 +448,28 @@ void StuideWindow::initArduinoCli() {
 
             coreManager->installCore("arduino:avr");
         }
+        });
+
+    connect(m_actionSerial, &QAction::triggered, this, [this]() {
+        if (!m_serialMonitor) {
+            m_serialMonitor = new SerialMonitorWindow(this);
+            m_serialMonitor->setWindowFlag(Qt::Window, true);
+            m_serialMonitor->setAttribute(Qt::WA_DeleteOnClose, false);
+        }
+
+        if (m_boardComboBox && m_boardComboBox->currentIndex() != -1) {
+            const QVariant data = m_boardComboBox->currentData();
+            if (data.canConvert<QStringList>()) {
+                const QStringList list = data.toStringList();
+                if (list.size() >= 2) {
+                    m_serialMonitor->setPreferredPort(list.at(1).trimmed());
+                }
+            }
+        }
+
+        m_serialMonitor->show();
+        m_serialMonitor->raise();
+        m_serialMonitor->activateWindow();
         });
 
     m_cliDownloader->ensureCliAvailable();
