@@ -98,14 +98,6 @@ void StuideWindow::setupMenuBar()
         LibraryManagerDialog dlg(&libMgr, this);
         dlg.exec();
         });
-    /*connect(m_actionLibMgr, &QAction::triggered, this, [this]() {
-        const QString cliPath = m_cliDownloader ? m_cliDownloader->getLocalCliPath() : m_cliManager.getCliPath();
-        auto* libraryMgr = new LibraryManager(cliPath, this);
-        auto* dlg = new LibraryManagerDialog(libraryMgr, this);
-        dlg->setAttribute(Qt::WA_DeleteOnClose);
-        libraryMgr->setParent(dlg);
-        dlg->exec();
-    });*/
 }
 
 void StuideWindow::setupToolBar()
