@@ -1,10 +1,12 @@
 #include "StuideWindow.h"
 #include "BoardManagerDialog.h"
 #include "SerialMonitorWindow.h"
+#include "LibraryManagerDialog.h"
 #include "../commun/TranslationManager.h"
 #include "../core/cli/CoreManager.h"
 #include "../core/cli/ArduinoCliDownloader.h"
 #include "../core/cli/ArduinoCliManager.h"
+#include "../core/cli/LibraryManager.h"
 #include "../core/sketch/CodeEditor.h"
 #include <QDate>
 #include <QFont>
@@ -90,6 +92,20 @@ void StuideWindow::setupMenuBar()
 
 		dlg->exec();
     });
+    connect(m_actionLibMgr, &QAction::triggered, this, [this]() {
+        const QString cliPath = m_cliDownloader ? m_cliDownloader->getLocalCliPath() : m_cliManager.getCliPath();
+        LibraryManager libMgr(cliPath);
+        LibraryManagerDialog dlg(&libMgr, this);
+        dlg.exec();
+        });
+    /*connect(m_actionLibMgr, &QAction::triggered, this, [this]() {
+        const QString cliPath = m_cliDownloader ? m_cliDownloader->getLocalCliPath() : m_cliManager.getCliPath();
+        auto* libraryMgr = new LibraryManager(cliPath, this);
+        auto* dlg = new LibraryManagerDialog(libraryMgr, this);
+        dlg->setAttribute(Qt::WA_DeleteOnClose);
+        libraryMgr->setParent(dlg);
+        dlg->exec();
+    });*/
 }
 
 void StuideWindow::setupToolBar()
@@ -444,7 +460,7 @@ void StuideWindow::initArduinoCli() {
                     m_cliManager.fetchAllBoards();
                 }
                 coreManager->deleteLater();
-                });
+            });
 
             coreManager->installCore("arduino:avr");
         }
