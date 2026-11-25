@@ -15,6 +15,9 @@
 #include <QString>
 #include <QEvent>
 #include <QLabel>
+#include <QDir>
+#include <QDesktopServices>
+#include <QUrl>
 
 class SerialMonitorWindow;
 
@@ -54,6 +57,8 @@ private:
 	void onCliErrorOccurred(const QString& errorMsg);
 	void compileCurrentSketch();
 	void uploadCurrentSketch();
+    void openSketchFolder();
+    void exportCompiledBinaries();
 
     QString currentTargetFqbn() const;
 
@@ -87,6 +92,8 @@ private:
     QAction* m_actionLibMgr = nullptr;
     QAction* m_actionSerial = nullptr;
     QAction* m_actionAbout = nullptr;
+    QAction* m_actionShowSketchFolder = nullptr;
+    QAction* m_actionExportBinaries = nullptr;
 
 	ArduinoCliDownloader* m_cliDownloader = nullptr;
     SerialMonitorWindow* m_serialMonitor = nullptr;

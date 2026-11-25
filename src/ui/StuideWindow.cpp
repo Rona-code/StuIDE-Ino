@@ -21,6 +21,9 @@
 #include <QLabel>
 #include <QSignalBlocker>
 #include <QStatusBar>
+#include <QDesktopServices>
+#include <QDir>
+#include <QUrl>
 
 StuideWindow::StuideWindow(QWidget* parent)
     : QMainWindow(parent)
@@ -58,10 +61,10 @@ void StuideWindow::setupMenuBar()
     m_actionRedo = m_menuEdit->addAction(tr("Rétablir"));
 
     m_menuSketch = bar->addMenu(tr("Croquis"));
-    m_actionVerify = m_menuSketch->addAction("✓");
-    m_actionVerify->setToolTip(tr("Vérifier"));
-    m_actionUpload = m_menuSketch->addAction("➔");
-    m_actionUpload->setToolTip(tr("Téléverser"));
+    m_actionShowSketchFolder = m_menuSketch->addAction(tr("Afficher le dossier des croquis"));
+    m_actionShowSketchFolder->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_K));
+    m_actionExportBinaries = m_menuSketch->addAction(tr("Exporter les binaires compilés"));
+    m_actionExportBinaries->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_S));
 
     m_menuTools = bar->addMenu(tr("Outils"));
     m_actionBoardMgr = m_menuTools->addAction(tr("Gestionnaire de cartes..."));
@@ -77,7 +80,9 @@ void StuideWindow::setupMenuBar()
     connect(m_actionSave, &QAction::triggered, this, &StuideWindow::onSaveSketch);
     connect(m_actionSaveAs, &QAction::triggered, this, &StuideWindow::onSaveAsSketch);
 	connect(m_actionVerify, &QAction::triggered, this, &StuideWindow::compileCurrentSketch);
-	connect(m_actionUpload, &QAction::triggered, this, &StuideWindow::uploadCurrentSketch);
+    connect(m_actionUpload, &QAction::triggered, this, &StuideWindow::uploadCurrentSketch);
+    connect(m_actionShowSketchFolder, &QAction::triggered, this, &StuideWindow::openSketchFolder);
+    connect(m_actionExportBinaries, &QAction::triggered, this, &StuideWindow::exportCompiledBinaries);
     connect(m_actionBoardMgr, &QAction::triggered, this, [this]() {
 		QString cliPath = m_cliDownloader ? m_cliDownloader->getLocalCliPath() : m_cliManager.getCliPath();
 		auto* coreMgr = new CoreManager(cliPath, this);
@@ -343,8 +348,12 @@ void StuideWindow::retranslateUi()
     m_actionRedo->setText(tr("Rétablir"));
 
     m_menuSketch->setTitle(tr("Croquis"));
-    m_actionVerify->setToolTip(tr("Vérifier"));
-    m_actionUpload->setToolTip(tr("Téléverser"));
+    if (m_actionShowSketchFolder) {
+        m_actionShowSketchFolder->setText(tr("Afficher le dossier des croquis"));
+    }
+    if (m_actionExportBinaries) {
+        m_actionExportBinaries->setText(tr("Exporter les binaires compilés"));
+    }
 
     m_menuTools->setTitle(tr("Outils"));
     m_actionBoardMgr->setText(tr("Gestionnaire de cartes..."));
@@ -418,6 +427,51 @@ void StuideWindow::onSaveAsSketch() {
         updateWindowTitle();
         m_console->append(tr("Croquis enregistré sous : ") + m_sketchManager.currentFilePath());
     }
+}
+
+void StuideWindow::openSketchFolder()
+{
+    const QString filePath = m_sketchManager.currentFilePath();
+    QString folderPath;
+
+    if (!filePath.isEmpty()) {
+        const QFileInfo info(filePath);
+        folderPath = info.exists() ? info.absolutePath() : info.absoluteDir().absolutePath();
+    }
+
+    if (folderPath.isEmpty() || !QDir(folderPath).exists()) {
+        m_console->append(tr("Erreur : aucun dossier de croquis valide trouvé."));
+        return;
+    }
+
+    QDesktopServices::openUrl(QUrl::fromLocalFile(folderPath));
+}
+
+void StuideWindow::exportCompiledBinaries()
+{
+    m_console->clear();
+
+    const QString currentContent = m_editor->toPlainText();
+    if (!m_sketchManager.saveSketch(currentContent)) {
+        if (!m_sketchManager.saveAsSketch(this, currentContent)) {
+            return;
+        }
+    }
+
+    const QString sketchPath = m_sketchManager.currentFilePath();
+    const QString fqbn = currentTargetFqbn();
+
+    if (fqbn.isEmpty()) {
+        m_console->append(tr("Erreur : aucun FQBN défini. Sélectionnez ou saisissez une carte dans la barre d'état en bas."));
+        if (m_statusBoardCombo) {
+            m_statusBoardCombo->setFocus();
+            m_statusBoardCombo->showPopup();
+        }
+        return;
+    }
+
+    m_console->append(tr("Compilation et export des binaires en cours pour %1...").arg(fqbn));
+    m_cliManager.compileSketch(sketchPath, fqbn, true);
 }
 
 // --- Gestion de l'Arduino CLI ---

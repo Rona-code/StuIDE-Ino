@@ -21,9 +21,9 @@ class ArduinoCliManager : public QObject {
 public:
     explicit ArduinoCliManager(QObject* parent = nullptr);
 
-    ~ArduinoCliManager() override;
+    ~ArduinoCliManager() override = default;
 
-	void compileSketch(const QString& sketchPath, const QString& fqbn);
+	void compileSketch(const QString& sketchPath, const QString& fqbn, bool exportBinaries = false);
 	void uploadSketch(const QString& sketchPath, const QString& fqbn, const QString& port);
     void refreshBoards();
     void fetchAllBoards();

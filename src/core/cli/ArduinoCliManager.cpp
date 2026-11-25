@@ -12,21 +12,21 @@
 
 ArduinoCliManager::ArduinoCliManager(QObject* parent) : QObject(parent) {}
 
-ArduinoCliManager::~ArduinoCliManager()
+/*ArduinoCliManager::~ArduinoCliManager()
 {
-    const auto processes = findChildren<QProcess*>();
+    const auto processes = findChildren<QProcess*>(QString(), Qt::FindDirectChildrenOnly);
     for (QProcess* proc : processes) {
         if (!proc) {
             continue;
         }
-        proc->blockSignals(true);
         proc->disconnect(this);
+        disconnect(proc, nullptr, this, nullptr);
         if (proc->state() != QProcess::NotRunning) {
             proc->kill();
             proc->waitForFinished(1000);
         }
     }
-}
+}*/
 
 // --- Gestion de Carte ---
 QString ArduinoCliManager::getCliPath() const {
@@ -207,7 +207,7 @@ void ArduinoCliManager::fetchAllBoards()
 }
 
 // --- Compilation ---
-void ArduinoCliManager::compileSketch(const QString& sketchPath, const QString& fqbn) {
+void ArduinoCliManager::compileSketch(const QString& sketchPath, const QString& fqbn, bool exportBinaries) {
     m_lastCompileSuccess = false;
     QProcess* process = new QProcess(this);
 
@@ -235,8 +235,19 @@ void ArduinoCliManager::compileSketch(const QString& sketchPath, const QString& 
 		process->deleteLater();
 	});
 
-	QString cliPath = getCliPath();
-	process->start(cliPath, { "compile", "--fqbn", fqbn, sketchPath });
+    QStringList args = {
+        QStringLiteral("compile"),
+        QStringLiteral("--fqbn"), fqbn
+    };
+
+    if (exportBinaries) {
+        args << QStringLiteral("--export-binaries");
+    }
+
+    args << sketchPath;
+
+    QString cliPath = getCliPath();
+    process->start(cliPath, args);
 }
 
 void ArduinoCliManager::uploadSketch(const QString& sketchPath, const QString& fqbn, const QString& port) {
