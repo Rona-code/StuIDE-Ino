@@ -74,24 +74,19 @@ private:
 
     // Menus
     QMenu* m_menuFile = nullptr;
-    QMenu* m_menuEdit = nullptr;
     QMenu* m_menuSketch = nullptr;
     QMenu* m_menuTools = nullptr;
-    QMenu* m_menuHelp = nullptr;
 
     // Actions traductibles
     QAction* m_actionNew = nullptr;
     QAction* m_actionOpen = nullptr;
     QAction* m_actionSave = nullptr;
 	QAction* m_actionSaveAs = nullptr;
-    QAction* m_actionUndo = nullptr;
-    QAction* m_actionRedo = nullptr;
     QAction* m_actionVerify = nullptr;
     QAction* m_actionUpload = nullptr;
     QAction* m_actionBoardMgr = nullptr;
     QAction* m_actionLibMgr = nullptr;
     QAction* m_actionSerial = nullptr;
-    QAction* m_actionAbout = nullptr;
     QAction* m_actionShowSketchFolder = nullptr;
     QAction* m_actionExportBinaries = nullptr;
 

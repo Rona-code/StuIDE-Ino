@@ -56,10 +56,6 @@ void StuideWindow::setupMenuBar()
     m_actionSave = m_menuFile->addAction(tr("Enregistrer"));
     m_actionSaveAs = m_menuFile->addAction(tr("Enregistrer sous..."));
 
-    m_menuEdit = bar->addMenu(tr("Édition"));
-    m_actionUndo = m_menuEdit->addAction(tr("Annuler"));
-    m_actionRedo = m_menuEdit->addAction(tr("Rétablir"));
-
     m_menuSketch = bar->addMenu(tr("Croquis"));
     m_actionShowSketchFolder = m_menuSketch->addAction(tr("Afficher le dossier des croquis"));
     m_actionShowSketchFolder->setShortcut(QKeySequence(Qt::CTRL | Qt::ALT | Qt::Key_K));
@@ -72,15 +68,10 @@ void StuideWindow::setupMenuBar()
     m_menuTools->addSeparator();
     m_actionSerial = m_menuTools->addAction(tr("Port série"));
 
-    m_menuHelp = bar->addMenu(tr("Aide"));
-    m_actionAbout = m_menuHelp->addAction(tr("À propos de StuIDE-Ino"));
-
     connect(m_actionNew, &QAction::triggered, this, &StuideWindow::onNewSketch);
     connect(m_actionOpen, &QAction::triggered, this, &StuideWindow::onOpenSketch);
     connect(m_actionSave, &QAction::triggered, this, &StuideWindow::onSaveSketch);
     connect(m_actionSaveAs, &QAction::triggered, this, &StuideWindow::onSaveAsSketch);
-	connect(m_actionVerify, &QAction::triggered, this, &StuideWindow::compileCurrentSketch);
-    connect(m_actionUpload, &QAction::triggered, this, &StuideWindow::uploadCurrentSketch);
     connect(m_actionShowSketchFolder, &QAction::triggered, this, &StuideWindow::openSketchFolder);
     connect(m_actionExportBinaries, &QAction::triggered, this, &StuideWindow::exportCompiledBinaries);
     connect(m_actionBoardMgr, &QAction::triggered, this, [this]() {
@@ -110,6 +101,14 @@ void StuideWindow::setupToolBar()
     m_toolbar = addToolBar("MainToolBar");
     m_toolbar->setMovable(false);
     m_toolbar->setIconSize(QSize(20, 20));
+
+    m_actionVerify = new QAction(("✓"), this);
+    m_actionVerify->setToolTip(tr("Vérifier"));
+    m_actionUpload = new QAction(("➔"), this);
+    m_actionUpload->setToolTip(tr("Téléverser"));
+
+    connect(m_actionVerify, &QAction::triggered, this, &StuideWindow::compileCurrentSketch);
+    connect(m_actionUpload, &QAction::triggered, this, &StuideWindow::uploadCurrentSketch);
 
     m_toolbar->addAction(m_actionVerify);
     m_toolbar->addAction(m_actionUpload);
@@ -343,10 +342,6 @@ void StuideWindow::retranslateUi()
     m_actionSave->setText(tr("Enregistrer"));
     m_actionSaveAs->setText(tr("Enregistrer sous..."));
 
-    m_menuEdit->setTitle(tr("Édition"));
-    m_actionUndo->setText(tr("Annuler"));
-    m_actionRedo->setText(tr("Rétablir"));
-
     m_menuSketch->setTitle(tr("Croquis"));
     if (m_actionShowSketchFolder) {
         m_actionShowSketchFolder->setText(tr("Afficher le dossier des croquis"));
@@ -359,9 +354,6 @@ void StuideWindow::retranslateUi()
     m_actionBoardMgr->setText(tr("Gestionnaire de cartes..."));
     m_actionLibMgr->setText(tr("Gestionnaire de bibliothèques..."));
     m_actionSerial->setText(tr("Port série"));
-
-    m_menuHelp->setTitle(tr("Aide"));
-    m_actionAbout->setText(tr("À propos de StuIDE-Ino"));
 
     m_editor->setPlaceholderText(tr("// Écrivez votre code Arduino ici..."));
     m_console->setPlaceholderText(tr("Console (logs de compilation)..."));
