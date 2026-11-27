@@ -363,8 +363,12 @@ add_deps() {
 cp "$BUILD/$APP" "$APPDIR/usr/bin/$APP"
 add_deps "$APPDIR/usr/bin/$APP"
 
-for d in platforms platforminputcontexts imageformats iconengines xcbglintegrations styles; do
-  cp -rL "$QTPLUG/$d" "$APPDIR/usr/plugins/"
+for ssl_lib in "$SYSROOT/usr/lib64"/libssl.so* "$SYSROOT/usr/lib64"/libcrypto.so*; do
+  [ -e "$ssl_lib" ] && cp -L "$ssl_lib" "$APPDIR/usr/lib/"
+done
+
+for d in platforms platforminputcontexts imageformats iconengines xcbglintegrations styles tls; do
+  [ -d "$QTPLUG/$d" ] && cp -rL "$QTPLUG/$d" "$APPDIR/usr/plugins/"
 done
 while read -r f; do add_deps "$f"; done < <(find "$APPDIR/usr/plugins" -name '*.so')
 
@@ -376,7 +380,7 @@ if [ -f "$APPDIR/usr/lib/libQt6WebEngineCore.so.6" ]; then
 	cp -rL "$SYSROOT/usr/share/qt6/translations/qtwebengine_locales" "$APPDIR/usr/translations/"
 fi
 
-bash ./@@PRUNE@@ "$APPDIR" "$APP"
+bash ./@@PRUNE@@ "$APPDIR" "$APP" "qopensslbackend|qcertonlybackend"
 
 cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/sh
@@ -384,6 +388,9 @@ HERE="$(dirname "$(readlink -f "$0")")"
 export LD_LIBRARY_PATH="$HERE/usr/lib:${LD_LIBRARY_PATH:-}"
 export QT_PLUGIN_PATH="$HERE/usr/plugins"
 export QT_QPA_PLATFORM_PLUGIN_PATH="$HERE/usr/plugins/platforms"
+if [ -z "${WAYLAND_DISPLAY:-}" ] || [ "${XDG_SESSION_TYPE:-}" = "x11" ]; then
+  export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
+fi
 if [ -x "$HERE/usr/libexec/QtWebEngineProcess" ]; then
   export QTWEBENGINEPROCESS_PATH="$HERE/usr/libexec/QtWebEngineProcess"
   export QTWEBENGINE_RESOURCES_PATH="$HERE/usr/resources"
@@ -449,8 +456,6 @@ bash ./$tmpName $ProjectName $version
 #=========================== Cibles ===========================
 switch ($Target) {
 	"all_static"         { Build-Windows -Static;           Build-Linux; Build-Linux-Arm  }
-	"all_secure_static"  { Build-Windows -Static -OpenSSL;  Build-Linux -OpenSSL; Build-Linux-Arm -OpenSSL }
 	"all_dynamic"        { Build-Windows; Build-InnoSetup;  Build-Linux; Build-Linux-Arm }
-	#"all_dynamic"       { Build-Linux-Arm }
-	"all_secure_dynamic" { Build-Windows -OpenSSL; Build-InnoSetup; Build-Linux -OpenSSL; Build-Linux-Arm -OpenSSL }
+	"all_secure_dynamic" { Build-Windows; Build-InnoSetup; Build-Linux -OpenSSL; Build-Linux-Arm -OpenSSL }
 }
