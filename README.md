@@ -38,4 +38,4 @@ Head over to the [**Releases**](../../releases) page to download the package for
 
 ## 📄 License
 
-This project is licensed under the **MIT** License. See the [LICENSE.txt](LICENSE) file for details.
+This project is licensed under the **MIT** License. See the [LICENSE](LICENSE.txt) file for details.
